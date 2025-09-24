@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Interaktives Angel-Quiz</title>
+  <style>
+    :root{
+      --bg: #2f3437;
+      --card: #3c4144;
+      --muted: #bfc7ca;
+      --accent: #2ecc71;
+      --danger: #e74c3c;
+      --glass: rgba(255,255,255,0.03);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Inter, Roboto, Arial, Helvetica, sans-serif;
+      background:var(--bg);
+      color:var(--muted);
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      padding:24px;
+    }
+
+    .app{
+      max-width:980px;
+      margin:0 auto;
+      display:grid;
+      grid-template-columns: 1fr 340px;
+      gap:20px;
+    }
+
+    header{grid-column:1/-1; margin-bottom:6px}
+    h1{margin:0 0 6px 0; color:#fff; font-size:20px}
+    p.lead{margin:0; color:var(--muted); font-size:13px}
+
+    .card{
+      background:linear-gradient(180deg,var(--card), #2f3437);
+      border-radius:12px;
+      padding:18px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+    }
+
+    .question-area{min-height:220px;}
+    .question-title{color:#fff; font-weight:600; margin:0 0 10px 0}
+    .input-row{display:flex; gap:10px; align-items:center}
+    input[type=text]{
+      flex:1; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.06);
+      background:var(--glass); color:var(--muted);
+      outline:none; font-size:14px;
+    }
+    input[type=text]::placeholder{color:rgba(191,199,202,0.6)}
+
+    button{
+      background:#4b5560; border:none; color:#fff; padding:9px 12px; border-radius:10px; cursor:pointer; font-weight:600;
+    }
+    button.primary{background:var(--accent); color:#01220f}
+    button.ghost{background:transparent; border:1px solid rgba(255,255,255,0.06); color:var(--muted)}
+
+    .feedback{display:inline-block; padding:6px 10px; border-radius:8px; margin-left:10px; font-weight:600}
+    .ok{background:var(--accent); color:#01220f}
+    .bad{background:var(--danger)}
+
+    .solved-list{margin-top:14px; display:flex; flex-direction:column; gap:8px}
+    .solved-item{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.18); color:var(--muted)}
+    .solved-item .name{font-weight:600; color:#fff}
+    .tag{font-size:13px; padding:6px 8px; border-radius:8px}
+
+    .controls{display:flex; gap:8px; margin-top:12px}
+
+    .hint{margin-top:12px; color:var(--muted); font-size:13px}
+
+    /* Sidebar */
+    .sidebar{height:100%}
+    .sidebar h3{margin:0 0 10px 0; color:#fff}
+    .progress{margin-bottom:12px}
+    .list-block{max-height:520px; overflow:auto; padding-right:6px}
+
+    /* modal */
+    .overlay{position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none; align-items:center; justify-content:center}
+    .overlay.show{display:flex}
+    .modal{background:var(--card); padding:20px; border-radius:12px; width:min(700px,94%); color:var(--muted)}
+    .modal h2{margin-top:0; color:#fff}
+    .modal .answers{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+    .chip{padding:8px 10px; border-radius:10px; background:rgba(0,0,0,0.12); color:var(--muted)}
+
+    /* final screen */
+    .final{display:flex; gap:12px; align-items:center; justify-content:space-between}
+
+    footer{grid-column:1/-1; margin-top:18px; text-align:center; color:rgba(255,255,255,0.5); font-size:13px}
+
+    @media (max-width:880px){
+      .app{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Interaktives Angel-Quiz</h1>
+      <p class="lead">3 Fragen — Schonzeiten, Mindestmaße, Fangverbote. Gib die Antwort ein, erhalte sofort Feedback. Hilfe zeigt Name + Lösung.</p>
+    </header>
+
+    <main class="card question-area" id="mainCard">
+      <div id="questionView">
+        <!-- Dynamischer Inhalt kommt hier -->
+      </div>
+
+      <div class="controls" id="controlsRow">
+        <!-- Buttons werden hier gerendert -->
+      </div>
+
+      <div class="hint" id="hintArea"></div>
+    </main>
+
+    <aside class="sidebar card">
+      <h3>Übersicht</h3>
+      <div class="progress" id="progressText">Frage 1 von 3</div>
+
+      <div><strong>Richtige Antworten (aktuelle Frage)</strong></div>
+      <div class="list-block" id="solvedList"></div>
+
+      <hr style="border:none;height:1px;background:rgba(255,255,255,0.04);margin:12px 0">
+      <div><strong>Alles (gesamt)</strong></div>
+      <div class="list-block" id="allSolvedList"></div>
+    </aside>
+
+    <div class="overlay" id="overlay">
+      <div class="modal" id="modal">
+        <h2 id="modalTitle">Nächste Frage</h2>
+        <div id="modalText" style="margin-top:8px; color:var(--muted)"></div>
+        <div class="answers" id="modalAnswers"></div>
+        <div style="margin-top:14px; text-align:right">
+          <button id="modalNext" class="primary">Nächste Frage starten</button>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <span>Viel Erfolg! — Tippe Enter, um zu prüfen. Hilfe zeigt die vollständige richtige Antwort.</span>
+    </footer>
+  </div>
+
+  <script>
+    /***********************
+     * Datensätze (wie du sie angegeben hast)
+     ***********************/
+
+    const schonzeitenData = [
+      {name: 'Äsche', value: '1.12. - 15.5.'},
+      {name: 'Bachforelle', value: '15.9. - 31.3.'},
+      {name: 'Barbe', value: '1.4. - 31.6.'},
+      {name: 'Hecht', value: '15.2. - 30.4.'},
+      {name: 'Zander', value: '15.2. - 31.5.'}
+    ];
+
+    const mindestmasseData = [
+      {name:'Aal', cm:50},
+      {name:'Äsche', cm:30},
+      {name:'Bachforelle', cm:25},
+      {name:'Barbe', cm:45},
+      {name:'Große Maräne', cm:30},
+      {name:'Hecht', cm:50},
+      {name:'Karpfen', cm:35},
+      {name:'Kleine Maräne', cm:12},
+      {name:'Quappe', cm:30},
+      {name:'Rapfen', cm:40},
+      {name:'Regenbogenforelle', cm:25},
+      {name:'Schleie', cm:25},
+      {name:'Zährte', cm:30},
+      {name:'Zander', cm:50}
+    ];
+
+    const fangverboteData = [
+      'Bachneunauge','Bitterling','Elritze','Finte','Flußneunauge','Groppe','Lachs','Maifisch','Meerforelle','Meerneunauge','Moderlieschen','Nase','Schlammpeitziger','Schmerle','Schneider','Steinbeißer','Stör','Nordseeschnäpel','Weißflossengründling'
+    ];
+
+    /***********************
+     * Hilfsfunktionen
+     ***********************/
+    function normalizeName(s){
+      return (s||'').trim().toLowerCase();
+    }
+
+    function parseFourNumbers(s){
+      if(!s) return null;
+      const nums = (s.match(/\d{1,2}/g) || []).map(n=>parseInt(n,10));
+      if(nums.length >= 4) return nums.slice(0,4);
+      return null;
+    }
+
+    function parseFirstNumber(s){
+      const m = s && s.match(/\d+/);
+      return m ? parseInt(m[0],10) : null;
+    }
+
+    // compare date ranges like "1.12. - 15.5." to user input flexibly
+    function compareDateRange(canonical, userInput){
+      const cNums = parseFourNumbers(canonical);
+      const uNums = parseFourNumbers(userInput);
+      if(!cNums) return false;
+      // if user didn't provide 4 numbers, it's wrong
+      if(!uNums) return false;
+      for(let i=0;i<4;i++) if(cNums[i] !== uNums[i]) return false;
+      return true;
+    }
+
+    /***********************
+     * Applikationszustand
+     ***********************/
+    const state = {
+      qIndex: 0, // 0 Schonzeiten, 1 Mindestmaße, 2 Fangverbote
+      solved: [new Set(), new Set(), new Set()], // sets of normalized names solved per question
+      allSolved: new Set(), // all solved across questions (display only)
+    };
+
+    // kleine Hilfs-Mappings für schnellen Lookup
+    const schonMap = {};
+    schonzeitenData.forEach(item=> schonMap[normalizeName(item.name)] = item);
+
+    const massMap = {};
+    mindestmasseData.forEach(item=> massMap[normalizeName(item.name)] = item);
+
+    const fangSet = new Set(fangverboteData.map(n=> normalizeName(n)));
+
+    /***********************
+     * Rendering
+     ***********************/
+    const questionView = document.getElementById('questionView');
+    const controlsRow = document.getElementById('controlsRow');
+    const hintArea = document.getElementById('hintArea');
+    const solvedList = document.getElementById('solvedList');
+    const allSolvedList = document.getElementById('allSolvedList');
+    const progressText = document.getElementById('progressText');
+
+    const overlay = document.getElementById('overlay');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalText = document.getElementById('modalText');
+    const modalAnswers = document.getElementById('modalAnswers');
+    const modalNext = document.getElementById('modalNext');
+
+    function render(){
+      progressText.textContent = `Frage ${state.qIndex+1} von 3`;
+      hintArea.textContent = '';
+      controlsRow.innerHTML = '';
+      solvedList.innerHTML = '';
+
+      if(state.qIndex === 0) renderSchonzeiten();
+      else if(state.qIndex === 1) renderMindestmasse();
+      else renderFangverbote();
+
+      // Gesamtübersicht
+      allSolvedList.innerHTML = '';
+      Array.from(state.allSolved).sort().forEach(n=>{
+        const div = document.createElement('div');
+        div.className = 'solved-item';
+        div.innerHTML = `<div class="name">${n}</div>`;
+        allSolvedList.appendChild(div);
+      });
+    }
+
+    /***********************
+     * Frage 1: Schonzeiten
+     ***********************/
+    function renderSchonzeiten(){
+      modalNext.onclick = ()=>{};
+      const card = document.createElement('div');
+      card.innerHTML = `
+        <h3 class="question-title">Frage 1 — Schonzeiten</h3>
+        <div style="color:var(--muted); margin-bottom:10px">Gib zuerst die Fischart ein. Wenn die Fischart korrekt ist, kannst du die Schonzeit eingeben.</div>
+        <div class="input-row">
+          <input type="text" id="fishInput" placeholder="Fischart eingeben..." autocomplete="off">
+          <button id="checkFish">Prüfen</button>
+          <button id="helpBtn" class="ghost">Hilfe</button>
+          <span id="fb" ></span>
+        </div>
+        <div id="dateRow" style="margin-top:12px; display:none">
+          <div style="color:var(--muted); margin-bottom:6px">Gib nun die Schonzeit ein (z. B. 1.12. - 15.5.)</div>
+          <div class="input-row">
+            <input type="text" id="dateInput" placeholder="Schonzeit eingeben...">
+            <button id="checkDate">Prüfen</button>
+            <span id="dateFb"></span>
+          </div>
+        </div>
+      `;
+      questionView.innerHTML = '';
+      questionView.appendChild(card);
+
+      // render solved list for this question
+      const arr = schonzeitenData.map(s=>s.name);
+      arr.forEach(name => {
+        const key = normalizeName(name);
+        if(state.solved[0].has(key)){
+          const data = schonMap[key];
+          const div = document.createElement('div');
+          div.className = 'solved-item';
+          div.innerHTML = `<div class='name'>${data.name}</div><div class='tag ok'>${data.value}</div>`;
+          solvedList.appendChild(div);
+        }
+      });
+
+      // event handlers
+      const fishInput = document.getElementById('fishInput');
+      const checkFish = document.getElementById('checkFish');
+      const fb = document.getElementById('fb');
+      const dateRow = document.getElementById('dateRow');
+      const dateInput = document.getElementById('dateInput');
+      const checkDate = document.getElementById('checkDate');
+      const dateFb = document.getElementById('dateFb');
+      const helpBtn = document.getElementById('helpBtn');
+
+      function showDateRowFor(name){
+        dateRow.style.display = 'block';
+        dateInput.focus();
+        dateInput.value = '';
+        dateFb.textContent = '';
+        dateFb.className = '';
+        // store current target fish on the input element
+        dateInput.dataset.target = name;
+      }
+
+      checkFish.onclick = ()=>{
+        const val = normalizeName(fishInput.value);
+        if(!val){
+          fb.textContent = 'Bitte zuerst eine Fischart eingeben.';
+          fb.className = 'feedback bad';
+          return;
+        }
+        if(state.solved[0].has(val)){
+          fb.textContent = 'Diese Fischart ist bereits gelöst.';
+          fb.className = 'feedback ok';
+          return;
+        }
+        if(schonMap[val]){
+          fb.textContent = 'Fisch erkannt — bitte Schonzeit eingeben.';
+          fb.className = 'feedback ok';
+          showDateRowFor(schonMap[val].name);
+        } else {
+          fb.textContent = '✘ Falsch oder nicht in der Liste.';
+          fb.className = 'feedback bad';
+        }
+      };
+
+      checkDate.onclick = ()=>{
+        const target = dateInput.dataset.target;
+        const user = dateInput.value;
+        if(!target){
+          dateFb.textContent = 'Bitte zuerst eine Fischart korrekt prüfen.';
+          dateFb.className = 'feedback bad';
+          return;
+        }
+        const key = normalizeName(target);
+        const canonical = schonMap[key].value;
+        if(compareDateRange(canonical, user)){
+          // mark solved
+          state.solved[0].add(key);
+          state.allSolved.add(`${canonical} — ${target}`);
+          dateFb.textContent = '✔ Richtig!';
+          dateFb.className = 'feedback ok';
+          // re-render to update lists
+          setTimeout(()=>{
+            // reset inputs
+            fishInput.value = '';
+            dateInput.value = '';
+            dateRow.style.display = 'none';
+            render();
+            checkIfQuestionComplete();
+          },700);
+        } else {
+          dateFb.textContent = '✘ Falsche Schonzeit.';
+          dateFb.className = 'feedback bad';
+        }
+      };
+
+      helpBtn.onclick = ()=>{
+        // find a missing fish
+        const missing = schonzeitenData.filter(it=> !state.solved[0].has(normalizeName(it.name)));
+        if(missing.length===0){
+          hintArea.textContent = 'Keine fehlenden Einträge mehr.';
+          return;
+        }
+        const pick = missing[Math.floor(Math.random()*missing.length)];
+        // reveal and mark as solved
+        const key = normalizeName(pick.name);
+        state.solved[0].add(key);
+        state.allSolved.add(`${pick.name} — ${pick.value}`);
+        hintArea.textContent = `Hilfe: ${pick.name} — ${pick.value}`;
+        render();
+        checkIfQuestionComplete();
+      };
+
+      // allow Enter to act like clicking Prüfen
+      fishInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') checkFish.click(); });
+      dateInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') checkDate.click(); });
+    }
+
+    /***********************
+     * Frage 2: Mindestmaße
+     ***********************/
+    function renderMindestmasse(){
+      const card = document.createElement('div');
+      card.innerHTML = `
+        <h3 class="question-title">Frage 2 — Mindestmaße</h3>
+        <div style="color:var(--muted); margin-bottom:10px">Gib eine Fischart ein. Zuerst prüfen wir, ob die Art ein Mindestmaß hat. Falls ja, gib anschließend das Maß in cm an.</div>
+        <div class="input-row">
+          <input type="text" id="fishInput2" placeholder="Fischart eingeben..." autocomplete="off">
+          <button id="checkFish2">Prüfen</button>
+          <button id="helpBtn2" class="ghost">Hilfe</button>
+          <span id="fb2"></span>
+        </div>
+        <div id="sizeRow" style="margin-top:12px; display:none">
+          <div style="color:var(--muted); margin-bottom:6px">Gib das Mindestmaß in cm (nur Zahl):</div>
+          <div class="input-row">
+            <input type="text" id="sizeInput" placeholder="z. B. 50">
+            <button id="checkSize">Prüfen</button>
+            <span id="sizeFb"></span>
+          </div>
+        </div>
+      `;
+      questionView.innerHTML = '';
+      questionView.appendChild(card);
+
+      // render solved list for this question
+      mindestmasseData.forEach(item => {
+        const key = normalizeName(item.name);
+        if(state.solved[1].has(key)){
+          const div = document.createElement('div');
+          div.className = 'solved-item';
+          div.innerHTML = `<div class='name'>${item.name}</div><div class='tag ok'>${item.cm} cm</div>`;
+          solvedList.appendChild(div);
+        }
+      });
+
+      const fishInput = document.getElementById('fishInput2');
+      const checkFish = document.getElementById('checkFish2');
+      const fb = document.getElementById('fb2');
+      const sizeRow = document.getElementById('sizeRow');
+      const sizeInput = document.getElementById('sizeInput');
+      const checkSize = document.getElementById('checkSize');
+      const sizeFb = document.getElementById('sizeFb');
+      const helpBtn = document.getElementById('helpBtn2');
+
+      function showSizeRowFor(name){
+        sizeRow.style.display = 'block';
+        sizeInput.value = '';
+        sizeFb.textContent = '';
+        sizeInput.dataset.target = name;
+        sizeInput.focus();
+      }
+
+      checkFish.onclick = ()=>{
+        const val = normalizeName(fishInput.value);
+        if(!val){ fb.textContent = 'Bitte eine Fischart eingeben.'; fb.className='feedback bad'; return; }
+        if(state.solved[1].has(val)){ fb.textContent='Bereits gelöst.'; fb.className='feedback ok'; return; }
+        if(massMap[val]){
+          fb.textContent = 'Hat ein Mindestmaß — bitte Maß eingeben.';
+          fb.className='feedback ok';
+          showSizeRowFor(massMap[val].name);
+        } else {
+          fb.textContent = '✘ Kein Mindestmaß bekannt / nicht in Liste.';
+          fb.className='feedback bad';
+        }
+      };
+
+      checkSize.onclick = ()=>{
+        const target = sizeInput.dataset.target;
+        const user = sizeInput.value;
+        if(!target){ sizeFb.textContent='Zuerst Fisch prüfen.'; sizeFb.className='feedback bad'; return; }
+        const key = normalizeName(target);
+        const expected = massMap[normalizeName(target)].cm;
+        const num = parseFirstNumber(user);
+        if(num === expected){
+          state.solved[1].add(key);
+          state.allSolved.add(`${target} — ${expected} cm`);
+          sizeFb.textContent = '✔ Richtig!'; sizeFb.className='feedback ok';
+          setTimeout(()=>{ fishInput.value=''; sizeInput.value=''; sizeRow.style.display='none'; render(); checkIfQuestionComplete(); },700);
+        } else {
+          sizeFb.textContent = '✘ Falsches Maß.'; sizeFb.className='feedback bad';
+        }
+      };
+
+      helpBtn.onclick = ()=>{
+        const missing = mindestmasseData.filter(it=> !state.solved[1].has(normalizeName(it.name)));
+        if(missing.length===0){ hintArea.textContent = 'Keine fehlenden Einträge mehr.'; return; }
+        const pick = missing[Math.floor(Math.random()*missing.length)];
+        state.solved[1].add(normalizeName(pick.name));
+        state.allSolved.add(`${pick.name} — ${pick.cm} cm`);
+        hintArea.textContent = `Hilfe: ${pick.name} — ${pick.cm} cm`;
+        render();
+        checkIfQuestionComplete();
+      };
+
+      fishInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') checkFish.click(); });
+      sizeInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') checkSize.click(); });
+    }
+
+    /***********************
+     * Frage 3: Fangverbote
+     ***********************/
+    function renderFangverbote(){
+      const card = document.createElement('div');
+      card.innerHTML = `
+        <h3 class="question-title">Frage 3 — Fangverbote</h3>
+        <div style="color:var(--muted); margin-bottom:10px">Gib die Namen der Arten ein, die Fangverbot haben. Kein zweiter Schritt nötig.</div>
+        <div class="input-row">
+          <input type="text" id="fishInput3" placeholder="Fischart eingeben..." autocomplete="off">
+          <button id="checkFish3">Prüfen</button>
+          <button id="helpBtn3" class="ghost">Hilfe</button>
+          <span id="fb3"></span>
+        </div>
+      `;
+      questionView.innerHTML = '';
+      questionView.appendChild(card);
+
+      fangverboteData.forEach(name => {
+        const key = normalizeName(name);
+        if(state.solved[2].has(key)){
+          const div = document.createElement('div');
+          div.className = 'solved-item';
+          div.innerHTML = `<div class='name'>${name}</div>`;
+          solvedList.appendChild(div);
+        }
+      });
+
+      const fishInput = document.getElementById('fishInput3');
+      const checkFish = document.getElementById('checkFish3');
+      const fb = document.getElementById('fb3');
+      const helpBtn = document.getElementById('helpBtn3');
+
+      checkFish.onclick = ()=>{
+        const val = normalizeName(fishInput.value);
+        if(!val){ fb.textContent='Bitte Eingabe.'; fb.className='feedback bad'; return; }
+        if(state.solved[2].has(val)){ fb.textContent='Bereits gelöst.'; fb.className='feedback ok'; return; }
+        if(fangSet.has(val)){
+          state.solved[2].add(val);
+          state.allSolved.add(nameForKey(val));
+          fb.textContent='✔ Richtig!'; fb.className='feedback ok';
+          setTimeout(()=>{ fishInput.value=''; render(); checkIfQuestionComplete(); },600);
+        } else {
+          fb.textContent='✘ Falsch oder nicht in der Liste.'; fb.className='feedback bad';
+        }
+      };
+
+      helpBtn.onclick = ()=>{
+        const missing = fangverboteData.filter(it=> !state.solved[2].has(normalizeName(it)));
+        if(missing.length===0){ hintArea.textContent='Keine fehlenden Einträge mehr.'; return; }
+        const pick = missing[Math.floor(Math.random()*missing.length)];
+        state.solved[2].add(normalizeName(pick));
+        state.allSolved.add(pick);
+        hintArea.textContent = `Hilfe: ${pick}`;
+        render();
+        checkIfQuestionComplete();
+      };
+
+      fishInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') checkFish.click(); });
+
+      function nameForKey(k){
+        // try find original name in arrays
+        const found1 = schonzeitenData.find(it => normalizeName(it.name)===k);
+        if(found1) return found1.name;
+        const found2 = mindestmasseData.find(it => normalizeName(it.name)===k);
+        if(found2) return found2.name;
+        const found3 = fangverboteData.find(it => normalizeName(it)===k);
+        if(found3) return found3;
+        return k;
+      }
+    }
+
+    /***********************
+     * Frage-Fertig prüfen und Modal
+     ***********************/
+    function checkIfQuestionComplete(){
+      if(state.qIndex===0){
+        if(state.solved[0].size >= schonzeitenData.length) showModalForQuestion(0);
+      } else if(state.qIndex===1){
+        if(state.solved[1].size >= mindestmasseData.length) showModalForQuestion(1);
+      } else {
+        if(state.solved[2].size >= fangverboteData.length) showModalForQuestion(2);
+      }
+    }
+
+    function showModalForQuestion(q){
+      overlay.classList.add('show');
+      modalAnswers.innerHTML = '';
+      if(q===0){
+        modalTitle.textContent = 'Schonzeiten — abgeschlossen';
+        modalText.textContent = 'Hier sind alle korrekten Lösungen für Schonzeiten:';
+        schonzeitenData.forEach(it=>{
+          const chip = document.createElement('div'); chip.className='chip'; chip.textContent = `${it.name} — ${it.value}`;
+          modalAnswers.appendChild(chip);
+        });
+      } else if(q===1){
+        modalTitle.textContent = 'Mindestmaße — abgeschlossen';
+        modalText.textContent = 'Hier alle Mindestmaße:';
+        mindestmasseData.forEach(it=>{
+          const chip = document.createElement('div'); chip.className='chip'; chip.textContent = `${it.name} — ${it.cm} cm`;
+          modalAnswers.appendChild(chip);
+        });
+      } else {
+        modalTitle.textContent = 'Fangverbote — abgeschlossen';
+        modalText.textContent = 'Hier alle Arten mit Fangverbot:';
+        fangverboteData.forEach(it=>{
+          const chip = document.createElement('div'); chip.className='chip'; chip.textContent = it;
+          modalAnswers.appendChild(chip);
+        });
+      }
+
+      modalNext.onclick = ()=>{
+        overlay.classList.remove('show');
+        if(state.qIndex < 2){ state.qIndex++; render(); }
+        else showFinalScreen();
+      };
+    }
+
+    function showFinalScreen(){
+      questionView.innerHTML = `
+        <div style="text-align:center; padding:28px 6px">
+          <h2 style="color:#fff; margin-bottom:6px">Quiz abgeschlossen 🎉</h2>
+          <div style="color:var(--muted); margin-bottom:14px">Du hast alle Fragen gelöst.</div>
+          <div style="display:flex; gap:10px; justify-content:center">
+            <button id="restartBtn" class="primary">Quiz neu starten</button>
+          </div>
+        </div>
+      `;
+      controlsRow.innerHTML = '';
+      document.getElementById('restartBtn').onclick = ()=> resetQuiz();
+    }
+
+    function resetQuiz(){
+      state.qIndex = 0; state.solved = [new Set(), new Set(), new Set()]; state.allSolved = new Set();
+      render();
+    }
+
+    // Initial render
+    render();
+
+    // safety: expose reset on window for quick testing
+    window._resetQuiz = resetQuiz;
+  </script>
+</body>
+</html>
